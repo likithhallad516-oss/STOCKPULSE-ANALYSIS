@@ -113,7 +113,7 @@ def validate_api_keys(bright_data_key: str, openai_key: str) -> tuple:
         errors.append("Bright Data API token appears to be invalid (too short)")
 
     if not openai_key or len(openai_key.strip()) < 10:
-        errors.append("OpenAI API key appears to be invalid (too short)")
+        errors.append("GROQ API key appears to be invalid (too short)")
 
     return len(errors) == 0, errors
 
@@ -139,10 +139,10 @@ def create_sidebar():
     )
 
     openai_api = st.sidebar.text_input(
-        "🤖 OpenAI API Key",
+        "🤖 GROQ API Key",
         type="password",
-        help="Get your API key from OpenAI platform",
-        placeholder="sk-...",
+        help="Get your API key from Groq platform",
+        placeholder="gsk_...",
     )
 
     st.sidebar.markdown("---")
@@ -213,7 +213,7 @@ def create_sidebar():
     • 📰 **Research** latest news & sentiment
     • 🎯 **Recommend** specific buy/sell actions
     
-    **Powered by**: LangChain + Bright Data + OpenAI
+    **Powered by**: LangChain + Bright Data + GROQ
     """
     )
 
@@ -310,7 +310,7 @@ def display_recommendations(text_output: str):
         st.markdown(
             f"""
         <div class="recommendation-card {card_class}">
-            <h3>{action_color} {rec['symbol']} - {rec['company']}</h3>
+            <h3>{action_color} {rec["symbol"]} - {rec["company"]}</h3>
         </div>
         """,
             unsafe_allow_html=True,
@@ -471,7 +471,7 @@ def main():
             
             1. **Enter API Keys** in the sidebar:
                - Bright Data API token
-               - OpenAI API key
+               - GROQ API key
             
             2. **Select Analysis Type**:
                - Short-term trading (1-7 days)
@@ -536,7 +536,9 @@ def main():
                 action_color = (
                     "🟢"
                     if data["action"] == "BUY"
-                    else "🔴" if data["action"] == "SELL" else "🟡"
+                    else "🔴"
+                    if data["action"] == "SELL"
+                    else "🟡"
                 )
                 st.markdown(
                     f"""
@@ -732,7 +734,7 @@ def enhanced_main():
             
             1. **Enter API Keys** in the sidebar:
                - Bright Data API token
-               - OpenAI API key
+               - GROQ API key
             
             2. **Select Analysis Type**:
                - Short-term trading (1-7 days)
@@ -797,7 +799,9 @@ def enhanced_main():
                 action_color = (
                     "🟢"
                     if data["action"] == "BUY"
-                    else "🔴" if data["action"] == "SELL" else "🟡"
+                    else "🔴"
+                    if data["action"] == "SELL"
+                    else "🟡"
                 )
                 st.markdown(
                     f"""
