@@ -1,10 +1,11 @@
 # stock_research_system.py
 import os
+import uuid
+import logging
 import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
-import json
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -15,6 +16,11 @@ from langgraph.prebuilt import create_react_agent
 from langchain_groq import ChatGroq
 from langgraph_supervisor import create_supervisor
 
+from logging_config import (
+    setup_logging,
+    session_id_ctx,
+    agent_id_ctx,
+)
 from prompts import (
     get_supervisor_prompt,
     get_stock_finder_prompt,
@@ -25,6 +31,10 @@ from prompts import (
 
 
 load_dotenv()
+
+setup_logging()
+
+logger = logging.getLogger(__name__)
 
 
 class StockAction(Enum):
@@ -76,6 +86,10 @@ class StockResearchSystem:
 
     async def initialize(self):
         """Initialize the MCP client and supervisor"""
+        logger.info("Initializing StockResearchSystem")
+
+        logger.info("Creating MCP client")
+
         self.client = MultiServerMCPClient(
             {
                 "bright_data": {
@@ -93,11 +107,16 @@ class StockResearchSystem:
             }
         )
 
+        logger.info("Fetching MCP tools")
         tools = await self.client.get_tools()
+        logger.info("Tools loaded", extra={"tool_count": len(tools)})
+
+        logger.info("Initializing LLM model")
         model = ChatGroq(
             model=os.getenv("MODEL_NAME"), api_key=os.getenv("GROQ_API_KEY")
         )
 
+        logger.info("Loading prompts")
         stock_finder_prompt = get_stock_finder_prompt()
         market_data_prompt = get_market_data_prompt()
         news_analyst_prompt = get_news_analyst_prompt()
@@ -105,20 +124,28 @@ class StockResearchSystem:
         supervisor_prompt = get_supervisor_prompt()
 
         # Create specialized agents
+        logger.info("Creating stock_finder_agent")
         stock_finder_agent = self._create_stock_finder_agent(
             model, tools, stock_finder_prompt
         )
+
+        logger.info("Creating market_data_agent")
         market_data_agent = self._create_market_data_agent(
             model, tools, market_data_prompt
         )
+
+        logger.info("Creating news_analyst_agent")
         news_analyst_agent = self._create_news_analyst_agent(
             model, tools, news_analyst_prompt
         )
+
+        logger.info("Creating recommendation_agent")
         recommendation_agent = self._create_recommendation_agent(
             model, tools, recommendation_prompt
         )
 
         # Create supervisor
+        logger.info("Creating supervisor")
         self.supervisor = create_supervisor(
             model=ChatGroq(
                 model=os.getenv("MODEL_NAME"), api_key=os.getenv("GROQ_API_KEY")
@@ -133,6 +160,7 @@ class StockResearchSystem:
             add_handoff_back_messages=True,
             output_mode="full_history",
         ).compile()
+        logger.info("StockResearchSystem initialized ✅")
 
     def _get_tool_name(self, tool: Any) -> str:
         """Safely extract a tool's name for logging and prompts."""
@@ -174,6 +202,7 @@ class StockResearchSystem:
         )
 
     def _create_stock_finder_agent(self, model, tools, prompt):
+        agent_id_ctx.set("stock_finder_agent")
         return create_react_agent(
             model,
             tools,
@@ -182,6 +211,7 @@ class StockResearchSystem:
         )
 
     def _create_market_data_agent(self, model, tools, prompt):
+        agent_id_ctx.set("market_data_agent")
         return create_react_agent(
             model,
             tools,
@@ -190,6 +220,7 @@ class StockResearchSystem:
         )
 
     def _create_news_analyst_agent(self, model, tools, prompt):
+        agent_id_ctx.set("news_analyst_agent")
         return create_react_agent(
             model,
             tools,
@@ -198,6 +229,7 @@ class StockResearchSystem:
         )
 
     def _create_recommendation_agent(self, model, tools, prompt):
+        agent_id_ctx.set("recommendation_agent")
         return create_react_agent(
             model,
             tools,
@@ -207,23 +239,45 @@ class StockResearchSystem:
 
     async def analyze_stocks(self, user_query: str = None) -> Dict[str, Any]:
         """Main method to run the complete stock analysis workflow"""
+        # Session-level context
+        session_id = str(uuid.uuid4())
+        session_id_ctx.set(session_id)
+        agent_id_ctx.set("supervisor")
+
+        logger.info("Starting stock analysis session")
+
         if not self.supervisor:
             await self.initialize()
 
         if not user_query:
             user_query = "Provide comprehensive stock analysis and trading recommendations for promising NSE-listed stocks suitable for short-term trading in the current market conditions."
 
-        # Store all messages for processing
-        all_messages = []
+        try:
+            logger.info("Starting supervisor execution")
+            # Store all messages for processing
+            all_messages = []
 
-        async for chunk in self.supervisor.astream(
-            {"messages": [{"role": "user", "content": user_query}]}
-        ):
-            all_messages.append(chunk)
+            async for chunk in self.supervisor.astream(
+                {"messages": [{"role": "user", "content": user_query}]}
+            ):
+                all_messages.append(chunk)
+
+            logger.info(
+                "Supervisor execution completed ✅",
+                extra={"total_chunks": len(all_messages)},
+            )
+        except Exception:
+            logger.exception("Stock analysis failed")
+            raise
 
         # Extract final results
         final_chunk = all_messages[-1] if all_messages else {}
         final_messages = final_chunk.get("supervisor", {}).get("messages", [])
+
+        logger.info(
+            "Stock analysis completed successfully ✅",
+            extra={"message_count": len(final_messages)},
+        )
 
         return {
             "status": "completed",
