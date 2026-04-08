@@ -9,6 +9,5 @@
 
 ---
 
-**Made with ❤️ for the Indian Stock Market Community**
 # STOCK-PULSE
 # STOCKPULSE-ANALYSIS
