@@ -249,3 +249,4 @@ For support and questions:
 ---
 
 **Made with ❤️ for the Indian Stock Market Community**
+# STOCK-PULSE
